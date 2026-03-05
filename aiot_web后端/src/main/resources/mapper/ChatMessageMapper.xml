@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aicoursemaster.mapper.ChatMessageMapper">
+
+    <resultMap id="ChatMessageResult" type="com.aicoursemaster.domain.ChatMessage">
+        <id property="id" column="id"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="role" column="role"/>
+        <result property="content" column="content"/>
+        <result property="attachmentIds" column="attachment_ids"/>
+        <result property="feedbackScore" column="feedback_score"/>
+        <result property="feedbackReason" column="feedback_reason"/>
+        <result property="promptTokens" column="prompt_tokens"/>
+        <result property="completionTokens" column="completion_tokens"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.aicoursemaster.domain.ChatMessage" useGeneratedKeys="true" keyProperty="id">
+        insert into chat_message
+        (
+            session_id, role, content,
+            attachment_ids, feedback_score, feedback_reason,
+            prompt_tokens, completion_tokens, create_time
+        )
+        values
+        (
+            #{sessionId}, #{role}, #{content},
+            #{attachmentIds}, #{feedbackScore}, #{feedbackReason},
+            #{promptTokens}, #{completionTokens}, #{createTime}
+        )
+    </insert>
+
+    <select id="selectById" parameterType="long" resultMap="ChatMessageResult">
+        select
+            id, session_id, role, content,
+            attachment_ids, feedback_score, feedback_reason,
+            prompt_tokens, completion_tokens, create_time
+        from chat_message
+        where id = #{id}
+    </select>
+
+    <select id="selectBySessionId" parameterType="string" resultMap="ChatMessageResult">
+        select
+            id, session_id, role, content,
+            attachment_ids, feedback_score, feedback_reason,
+            prompt_tokens, completion_tokens, create_time
+        from chat_message
+        where session_id = #{sessionId}
+        order by create_time asc
+    </select>
+
+    <select id="selectLatestBySessionId" resultMap="ChatMessageResult">
+        select
+            id, session_id, role, content,
+            attachment_ids, feedback_score, feedback_reason,
+            prompt_tokens, completion_tokens, create_time
+        from chat_message
+        where session_id = #{sessionId}
+        order by create_time desc
+        limit #{limit}
+    </select>
+
+    <delete id="deleteBySessionId" parameterType="string">
+        delete from chat_message
+        where session_id = #{sessionId}
+    </delete>
+
+    <delete id="deleteByIds">
+        delete from chat_message
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="countByIdsAndSession" resultType="long">
+        select count(*)
+        from chat_message
+        where session_id = #{sessionId}
+          and id in
+          <foreach collection="ids" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </select>
+
+    <update id="updateFeedback">
+        update chat_message
+        set
+            feedback_score = #{score},
+            feedback_reason = #{reason}
+        where id = #{id}
+    </update>
+
+    <update id="updateTokenUsage">
+        update chat_message
+        set
+            prompt_tokens = #{promptTokens},
+            completion_tokens = #{completionTokens}
+        where id = #{id}
+    </update>
+
+</mapper>
+
