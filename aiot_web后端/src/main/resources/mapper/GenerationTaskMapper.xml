@@ -70,6 +70,7 @@
     <update id="updateByTaskId" parameterType="com.aicoursemaster.domain.GenerationTask">
         update generation_task
         set
+            final_requirements = #{finalRequirements},
             status = #{status},
             progress = #{progress},
             ppt_url = #{pptUrl},

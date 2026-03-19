@@ -1,5 +1,7 @@
 package com.aicoursemaster.service.impl;
 
+import com.aicoursemaster.ai.RagApiClient;
+import com.aicoursemaster.ai.dto.LlmGenerateResponse;
 import com.aicoursemaster.common.ApiResponse;
 import com.aicoursemaster.domain.ChatSession;
 import com.aicoursemaster.domain.GenerationLog;
@@ -26,6 +28,7 @@ public class GenerationServiceImpl implements GenerationService {
     private final ChatSessionMapper chatSessionMapper;
     private final GenerationTaskMapper generationTaskMapper;
     private final GenerationLogMapper generationLogMapper;
+    private final RagApiClient ragApiClient;
 
     @Override
     public ApiResponse<Map<String, Object>> startGeneration(String sessionId, String finalRequirements,
@@ -52,11 +55,38 @@ public class GenerationServiceImpl implements GenerationService {
         session.setStatus(1);
         chatSessionMapper.updateTitleAndStatus(session);
 
-        GenerationLog log = new GenerationLog();
-        log.setTaskId(task.getTaskId());
-        log.setMessage("任务已提交，系统开始构建大纲...");
-        log.setCreateTime(LocalDateTime.now());
-        generationLogMapper.insert(log);
+        GenerationLog submitLog = new GenerationLog();
+        submitLog.setTaskId(task.getTaskId());
+        submitLog.setMessage("任务已提交，系统开始构建大纲...");
+        submitLog.setCreateTime(LocalDateTime.now());
+        generationLogMapper.insert(submitLog);
+
+        // 调用通用生成接口，先产出一个可预览的大纲（失败时降级为占位文案，不中断主流程）
+        String outlinePrompt = String.format(
+                "请为以下教学需求生成一份结构化课程大纲（按章节列点，中文输出）：\n%s",
+                finalRequirements == null ? "" : finalRequirements
+        );
+        try {
+            LlmGenerateResponse llmResp = ragApiClient.llmGenerate(
+                    outlinePrompt,
+                    "你是课程设计助手，请只输出清晰的大纲正文，不要输出额外解释。",
+                    sessionId
+            );
+            if (llmResp != null && llmResp.getAnswer() != null) {
+                task.setOutline(llmResp.getAnswer());
+                task.setProgress(20);
+                task.setUpdateTime(LocalDateTime.now());
+                generationTaskMapper.updateByTaskId(task);
+
+                GenerationLog outlineLog = new GenerationLog();
+                outlineLog.setTaskId(task.getTaskId());
+                outlineLog.setMessage("已生成初版课程大纲，可继续触发后续生成流程。");
+                outlineLog.setCreateTime(LocalDateTime.now());
+                generationLogMapper.insert(outlineLog);
+            }
+        } catch (Exception e) {
+            log.warn("调用 LLM 生成大纲失败，taskId={}, error={}", task.getTaskId(), e.getMessage());
+        }
 
         Map<String, Object> data = new HashMap<>();
         data.put("taskId", task.getTaskId());
@@ -101,6 +131,38 @@ public class GenerationServiceImpl implements GenerationService {
             data.put("outline", null);
         }
         return ApiResponse.success(data);
+    }
+
+    @Override
+    public ApiResponse<Map<String, Object>> saveOutline(String sessionId, String outline, String reason, Long userId) {
+        ChatSession session = chatSessionMapper.selectByIdAndUserId(sessionId, userId);
+        if (session == null) {
+            return ApiResponse.error(404, "会话不存在或无权限");
+        }
+        GenerationTask latest = generationTaskMapper.selectLatestBySessionId(sessionId);
+        if (latest == null) {
+            return ApiResponse.error(404, "暂无可修改的生成任务");
+        }
+        latest.setOutline(outline);
+        latest.setUpdateTime(LocalDateTime.now());
+        if (reason != null && !reason.isBlank()) {
+            String mergedReq = (latest.getFinalRequirements() == null ? "" : latest.getFinalRequirements())
+                    + "\n【用户大纲修改原因】" + reason;
+            latest.setFinalRequirements(mergedReq);
+        }
+        generationTaskMapper.updateByTaskId(latest);
+
+        GenerationLog editLog = new GenerationLog();
+        editLog.setTaskId(latest.getTaskId());
+        editLog.setMessage("用户已修改大纲并保存。原因：" + (reason == null ? "未填写" : reason));
+        editLog.setCreateTime(LocalDateTime.now());
+        generationLogMapper.insert(editLog);
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("taskId", latest.getTaskId());
+        data.put("outline", latest.getOutline());
+        data.put("saved", true);
+        return ApiResponse.success("大纲修改已保存", data);
     }
 }
 

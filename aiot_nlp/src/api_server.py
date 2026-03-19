@@ -112,6 +112,16 @@ class QueryResponse(BaseModel):
     sessionId: str
     model_used: str
 
+class LlmGenerateRequest(BaseModel):
+    prompt: str
+    systemPrompt: Optional[str] = None
+    sessionId: Optional[str] = "default_session"
+
+class LlmGenerateResponse(BaseModel):
+    answer: str
+    sessionId: str
+    model_used: str
+
 # ================= API 接口实现 =================
 
 @app.on_event("startup")
@@ -119,11 +129,8 @@ async def startup_event():
     """服务启动时自动初始化系统"""
     initialize_system()
 
-@app.post("/api/retrieve_and_answer", response_model=QueryResponse)
-async def retrieve_and_answer(request: QueryRequest):
-    """
-    核心接口：接收问题，检索文档，生成答案
-    """
+def _build_rag_response(request: QueryRequest) -> QueryResponse:
+    """RAG 问答核心逻辑（供多个路由复用）"""
     if not rag_engine or not llm_engine:
         raise HTTPException(status_code=503, detail="System not initialized yet")
     
@@ -179,6 +186,40 @@ async def retrieve_and_answer(request: QueryRequest):
     return QueryResponse(
         answer=response_text,
         sources=sources_list,
+        sessionId=request.sessionId,
+        model_used=SYSTEM_CONFIG.get("model_name", "unknown")
+    )
+
+@app.post("/api/retrieve_and_answer", response_model=QueryResponse)
+async def retrieve_and_answer(request: QueryRequest):
+    """
+    兼容旧接口：接收问题，检索文档，生成答案
+    """
+    return _build_rag_response(request)
+
+@app.post("/api/rag/chat", response_model=QueryResponse)
+async def rag_chat(request: QueryRequest):
+    """
+    新接口：RAG 多轮问答
+    """
+    return _build_rag_response(request)
+
+@app.post("/api/llm/generate", response_model=LlmGenerateResponse)
+async def llm_generate(request: LlmGenerateRequest):
+    """
+    新接口：通用文本生成（不走 RAG 检索）
+    """
+    if not llm_engine:
+        raise HTTPException(status_code=503, detail="LLM not initialized yet")
+    if not request.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+    try:
+        response_text = llm_engine.generate(request.prompt, system_prompt=request.systemPrompt)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM Generation Error: {str(e)}")
+
+    return LlmGenerateResponse(
+        answer=response_text,
         sessionId=request.sessionId,
         model_used=SYSTEM_CONFIG.get("model_name", "unknown")
     )

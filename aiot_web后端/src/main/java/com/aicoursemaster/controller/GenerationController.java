@@ -41,5 +41,14 @@ public class GenerationController {
         String sessionId = (String) body.get("sessionId");
         return generationService.getResult(sessionId, currentUserId(userId));
     }
+
+    @PostMapping("/outline/save")
+    public ApiResponse<Map<String, Object>> saveOutline(@RequestBody Map<String, Object> body,
+                                                        @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+        String sessionId = (String) body.get("sessionId");
+        String outline = (String) body.get("outline");
+        String reason = (String) body.get("reason");
+        return generationService.saveOutline(sessionId, outline, reason, currentUserId(userId));
+    }
 }
 

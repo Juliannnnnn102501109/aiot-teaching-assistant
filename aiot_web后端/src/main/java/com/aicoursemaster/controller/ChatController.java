@@ -36,6 +36,21 @@ public class ChatController {
         return chatService.createSession(sceneType, firstPrompt, currentUserId(userId));
     }
 
+    @PostMapping("/chat/session/list")
+    public ApiResponse<Map<String, Object>> listSessions(@RequestBody(required = false) Map<String, Object> body,
+                                                         @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+        String keyword = body == null ? null : (String) body.get("keyword");
+        return chatService.listSessions(keyword, currentUserId(userId));
+    }
+
+    @PostMapping("/chat/session/pin")
+    public ApiResponse<Map<String, Object>> pinSession(@RequestBody Map<String, Object> body,
+                                                       @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+        String sessionId = (String) body.get("sessionId");
+        Boolean pin = (Boolean) body.getOrDefault("pin", Boolean.TRUE);
+        return chatService.togglePinSession(sessionId, Boolean.TRUE.equals(pin), currentUserId(userId));
+    }
+
     @PostMapping("/chat/message/send")
     public ApiResponse<Map<String, Object>> sendMessage(@RequestBody Map<String, Object> body,
                                                         @RequestHeader(value = "X-User-Id", required = false) Long userId) {

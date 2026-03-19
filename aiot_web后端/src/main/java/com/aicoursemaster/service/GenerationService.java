@@ -14,5 +14,10 @@ public interface GenerationService {
     ApiResponse<Map<String, Object>> queryStatus(String sessionId, Long userId);
 
     ApiResponse<Map<String, Object>> getResult(String sessionId, Long userId);
+
+    ApiResponse<Map<String, Object>> saveOutline(String sessionId,
+                                                 String outline,
+                                                 String reason,
+                                                 Long userId);
 }
 

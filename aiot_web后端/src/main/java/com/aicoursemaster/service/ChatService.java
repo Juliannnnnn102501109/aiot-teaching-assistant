@@ -12,6 +12,10 @@ public interface ChatService {
 
     ApiResponse<Map<String, Object>> createSession(Integer sceneType, String firstPrompt, Long userId);
 
+    ApiResponse<Map<String, Object>> listSessions(String keyword, Long userId);
+
+    ApiResponse<Map<String, Object>> togglePinSession(String sessionId, boolean pin, Long userId);
+
     ApiResponse<Map<String, Object>> sendMessage(String sessionId,
                                                  String content,
                                                  List<Long> fileIds,
