@@ -10,7 +10,7 @@ langchain_ollama==1.0.1
 langchain_openai==1.1.11
 langchain_text_splitters==1.1.1
 loguru==0.7.3
-numpy==2.4.3
+numpy==1.26.4
 opencv_python==4.13.0.92
 pandas==2.3.3
 Pillow==12.1.1
