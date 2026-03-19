@@ -29,9 +29,9 @@ pip install -r requirements.txt
 将你的课件 (PDF, DOCX, TXT) 放入项目根目录下的 `data` 文件夹中。
 *(如果没有 data 文件夹，请手动创建)*
 
-### 3. 运行系统
+### 3. 启动服务
 ```bash
-streamlit run app.py
+python api_server.py
 ```
 
 ### 4. 首次运行说明
@@ -44,6 +44,7 @@ streamlit run app.py
 - `app.py`: Streamlit 前端入口，包含动态 Top-K 逻辑。
 - `src/rag_engine.py`: 核心检索引擎 (FAISS + BM25 + Jieba + 缓存管理)。
 - `src/llm_engine.py`: LLM 交互逻辑 (对接 Ollama)。
+- `src/api_server.py`: 独立的入口文件，不依赖 Streamlit，专门用于提供 HTTP 服务。
 - `data/`: 存放原始文档。
 - `data_cache/`: (自动生成) 存放构建好的向量索引和 BM25 缓存。
 
