@@ -19,5 +19,32 @@ public interface GenerationService {
                                                  String outline,
                                                  String reason,
                                                  Long userId);
+
+    ApiResponse<Map<String, Object>> cancelGeneration(String sessionId, Long userId);
+
+    /**
+     * 生成结果回调：更新任务与会话，并写入版本快照（change_type=generation_callback）。
+     */
+    ApiResponse<Void> handleGenerationResultCallback(String taskId,
+                                                     String status,
+                                                     Integer progress,
+                                                     String pptUrl,
+                                                     String docUrl,
+                                                     String gameUrl,
+                                                     String outline,
+                                                     String errorMsg);
+
+    /**
+     * 版本历史列表。taskId 为空则取该会话最新一笔生成任务。
+     */
+    ApiResponse<Map<String, Object>> listGenerationVersions(String sessionId, String taskId, Long userId);
+
+    /**
+     * 版本详情。taskId 为空则取该会话最新一笔生成任务。
+     */
+    ApiResponse<Map<String, Object>> getGenerationVersionDetail(String sessionId,
+                                                                String taskId,
+                                                                Integer versionNo,
+                                                                Long userId);
 }
 

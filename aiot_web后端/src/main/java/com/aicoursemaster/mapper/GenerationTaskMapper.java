@@ -14,5 +14,9 @@ public interface GenerationTaskMapper {
     GenerationTask selectByTaskId(@Param("taskId") String taskId);
 
     int updateByTaskId(GenerationTask task);
+
+    int updateTaskIdById(@Param("id") Long id, @Param("taskId") String taskId);
+
+    long countAll();
 }
 

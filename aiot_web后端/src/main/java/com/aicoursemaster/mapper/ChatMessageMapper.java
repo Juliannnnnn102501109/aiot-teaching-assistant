@@ -32,5 +32,16 @@ public interface ChatMessageMapper {
     int updateTokenUsage(@Param("id") Long id,
                          @Param("promptTokens") Integer promptTokens,
                          @Param("completionTokens") Integer completionTokens);
+
+    int updateContentAndAttachments(@Param("id") Long id,
+                                    @Param("content") String content,
+                                    @Param("attachmentIds") String attachmentIds);
+
+    int updateAttachmentIds(@Param("id") Long id, @Param("attachmentIds") String attachmentIds);
+
+    int deleteBySessionIdAndIdGreaterThan(@Param("sessionId") String sessionId,
+                                          @Param("afterId") Long afterId);
+
+    long countAll();
 }
 

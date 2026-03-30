@@ -92,5 +92,18 @@
         order by create_time desc
     </select>
 
+    <update id="updateTitle">
+        update chat_session
+        set
+            title = #{title},
+            update_time = now()
+        where id = #{id}
+          and user_id = #{userId}
+    </update>
+
+    <select id="countAll" resultType="long">
+        select count(*) from chat_session
+    </select>
+
 </mapper>
 

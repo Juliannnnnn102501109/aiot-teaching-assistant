@@ -22,8 +22,28 @@ public class AiRagProperties {
     private String llmGeneratePath = "/api/llm/generate";
 
     /**
+     * 课件生成接口路径（产出 PPT/DOCX/互动页面）
+     */
+    private String coursewareGeneratePath = "/api/courseware/generate";
+
+    /**
+     * AI 服务健康检查路径（GET）
+     */
+    private String healthPath = "/health";
+
+    /**
      * 默认 topK
      */
     private int defaultTopK = 5;
+
+    /**
+     * 调用 Python 服务的连接超时（秒）
+     */
+    private int connectTimeoutSeconds = 10;
+
+    /**
+     * 调用 Python 服务的读取超时（秒）
+     */
+    private int readTimeoutSeconds = 300;
 }
 

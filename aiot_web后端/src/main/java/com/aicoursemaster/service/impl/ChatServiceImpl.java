@@ -11,6 +11,7 @@ import com.aicoursemaster.mapper.ChatMessageMapper;
 import com.aicoursemaster.mapper.ChatSessionMapper;
 import com.aicoursemaster.mapper.MaterialMapper;
 import com.aicoursemaster.service.ChatService;
+import com.aicoursemaster.service.SensitiveWordService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -36,6 +37,7 @@ public class ChatServiceImpl implements ChatService {
     private final StringRedisTemplate stringRedisTemplate;
     private final RagApiClient ragApiClient;
     private final MaterialParseAsyncService materialParseAsyncService;
+    private final SensitiveWordService sensitiveWordService;
 
     @Override
     public ApiResponse<Map<String, Object>> getSessionDetail(String sessionId, Long userId) {
@@ -130,12 +132,26 @@ public class ChatServiceImpl implements ChatService {
     }
 
     @Override
-    public ApiResponse<Map<String, Object>> listSessions(String keyword, Long userId) {
+    public ApiResponse<Map<String, Object>> listSessions(String keyword, Integer page, Integer size, Long userId) {
         List<ChatSession> sessions = chatSessionMapper.selectByUserId(userId);
+        String pinKey = "pinned_sessions:" + userId;
         Set<String> pinned = Optional.ofNullable(
-                stringRedisTemplate.opsForZSet().reverseRange("pinned_sessions:" + userId, 0, -1)
+                stringRedisTemplate.opsForZSet().reverseRange(pinKey, 0, -1)
         ).orElse(Collections.emptySet());
+        Map<String, Double> pinScoreMap = new HashMap<>();
+        Set<org.springframework.data.redis.core.ZSetOperations.TypedTuple<String>> scoreTuples =
+                Optional.ofNullable(stringRedisTemplate.opsForZSet().reverseRangeWithScores(pinKey, 0, -1))
+                        .orElse(Collections.emptySet());
+        for (org.springframework.data.redis.core.ZSetOperations.TypedTuple<String> tuple : scoreTuples) {
+            String sid = tuple.getValue();
+            Double score = tuple.getScore();
+            if (sid != null) {
+                pinScoreMap.put(sid, score == null ? 0D : score);
+            }
+        }
         String kw = StringUtils.hasText(keyword) ? keyword.trim() : null;
+        int pageNo = page == null || page < 1 ? 1 : page;
+        int pageSize = size == null || size < 1 ? 20 : Math.min(size, 100);
 
         List<Map<String, Object>> items = sessions.stream()
                 .filter(s -> matchSessionByKeyword(s, kw))
@@ -144,6 +160,13 @@ public class ChatServiceImpl implements ChatService {
                     boolean bPinned = pinned.contains(b.getId());
                     if (aPinned != bPinned) {
                         return aPinned ? -1 : 1;
+                    }
+                    if (aPinned) {
+                        double aScore = pinScoreMap.getOrDefault(a.getId(), 0D);
+                        double bScore = pinScoreMap.getOrDefault(b.getId(), 0D);
+                        if (Double.compare(bScore, aScore) != 0) {
+                            return Double.compare(bScore, aScore);
+                        }
                     }
                     LocalDateTime at = a.getUpdateTime() != null ? a.getUpdateTime() : a.getCreateTime();
                     LocalDateTime bt = b.getUpdateTime() != null ? b.getUpdateTime() : b.getCreateTime();
@@ -161,9 +184,18 @@ public class ChatServiceImpl implements ChatService {
                 })
                 .collect(Collectors.toList());
 
+        int total = items.size();
+        int fromIndex = (pageNo - 1) * pageSize;
+        List<Map<String, Object>> pageItems = fromIndex >= total
+                ? Collections.emptyList()
+                : items.subList(fromIndex, Math.min(fromIndex + pageSize, total));
+
         Map<String, Object> data = new HashMap<>();
-        data.put("items", items);
-        data.put("total", items.size());
+        data.put("items", pageItems);
+        data.put("total", total);
+        data.put("page", pageNo);
+        data.put("size", pageSize);
+        data.put("hasMore", fromIndex + pageItems.size() < total);
         return ApiResponse.success(data);
     }
 
@@ -186,11 +218,52 @@ public class ChatServiceImpl implements ChatService {
     }
 
     @Override
+    public ApiResponse<Map<String, Object>> reorderPinnedSessions(List<String> orderedSessionIds, Long userId) {
+        if (CollectionUtils.isEmpty(orderedSessionIds)) {
+            return ApiResponse.error(400, "orderedSessionIds 不能为空");
+        }
+        String key = "pinned_sessions:" + userId;
+        Set<String> pinned = Optional.ofNullable(
+                stringRedisTemplate.opsForZSet().reverseRange(key, 0, -1)
+        ).orElse(Collections.emptySet());
+        if (pinned.isEmpty()) {
+            return ApiResponse.error(400, "当前没有置顶会话可排序");
+        }
+        Set<String> orderedSet = new LinkedHashSet<>(orderedSessionIds);
+        if (orderedSet.size() != orderedSessionIds.size()) {
+            return ApiResponse.error(400, "orderedSessionIds 不能包含重复值");
+        }
+        if (!pinned.equals(orderedSet)) {
+            return ApiResponse.error(400, "orderedSessionIds 必须与当前置顶集合完全一致");
+        }
+        for (String sessionId : orderedSessionIds) {
+            ChatSession session = chatSessionMapper.selectByIdAndUserId(sessionId, userId);
+            if (session == null) {
+                return ApiResponse.error(403, "存在无权限会话，拒绝排序");
+            }
+        }
+        double score = System.currentTimeMillis() + orderedSessionIds.size();
+        for (String sessionId : orderedSessionIds) {
+            stringRedisTemplate.opsForZSet().add(key, sessionId, score--);
+        }
+        Map<String, Object> data = new HashMap<>();
+        data.put("orderedSessionIds", orderedSessionIds);
+        data.put("count", orderedSessionIds.size());
+        return ApiResponse.success("置顶顺序已更新", data);
+    }
+
+    @Override
     public ApiResponse<Map<String, Object>> sendMessage(String sessionId, String content, List<Long> fileIds,
                                                         Integer sceneType, boolean isResend, Long userId) {
         ChatSession session = chatSessionMapper.selectByIdAndUserId(sessionId, userId);
         if (session == null) {
             return ApiResponse.error(404, "会话不存在或无权限");
+        }
+        if (StringUtils.hasText(content)) {
+            String hit = sensitiveWordService.findHitInUserText(content);
+            if (hit != null) {
+                return ApiResponse.error(400, "内容包含敏感词，请修改后重试");
+            }
         }
         // 保存用户消息
         ChatMessage userMsg = new ChatMessage();
@@ -206,24 +279,12 @@ public class ChatServiceImpl implements ChatService {
         String question = StringUtils.hasText(content) ? content : "";
         String replyText;
         try {
-            if (!CollectionUtils.isEmpty(fileIds)) {
-                String materialsContext = buildMaterialsContext(fileIds, sessionId);
-                String chatHistory = buildLatestHistory(sessionId, 8);
-                String prompt = "【历史对话】\n" + chatHistory + "\n\n【附件解析结果】\n" + materialsContext
-                        + "\n\n【用户问题】\n" + question;
-                LlmGenerateResponse llmResp = ragApiClient.llmGenerate(
-                        prompt,
-                        "你是教学助手，请优先依据附件解析结果回答。若信息不足，请明确说明不足点。",
-                        sessionId
-                );
-                replyText = llmResp == null ? "" : llmResp.getAnswer();
-            } else {
-                RagRetrieveAndAnswerResponse ragResp = ragApiClient.ragChat(question, sessionId, 5, false);
-                replyText = ragResp == null ? "" : ragResp.getAnswer();
-            }
+            replyText = generateAssistantReply(sessionId, question, fileIds);
         } catch (Exception e) {
             return ApiResponse.error(503, "AI 服务暂不可用，请稍后重试");
         }
+
+        replyText = sensitiveWordService.sanitizeAssistantOutput(StringUtils.hasText(replyText) ? replyText : "");
 
         ChatMessage aiMsg = new ChatMessage();
         aiMsg.setSessionId(sessionId);
@@ -473,6 +534,245 @@ public class ChatServiceImpl implements ChatService {
         data.put("url", "/api/v1/stream/file/" + material.getId());
         data.put("canDirectPreview", true);
         return ApiResponse.success("获取预览链接成功", data);
+    }
+
+    @Override
+    public ApiResponse<Map<String, Object>> renameSession(String sessionId, String title, Long userId) {
+        if (!StringUtils.hasText(title)) {
+            return ApiResponse.error(400, "title 不能为空");
+        }
+        ChatSession session = chatSessionMapper.selectByIdAndUserId(sessionId, userId);
+        if (session == null) {
+            return ApiResponse.error(404, "会话不存在或无权限");
+        }
+        String t = title.trim();
+        if (t.length() > 128) {
+            return ApiResponse.error(400, "标题过长");
+        }
+        chatSessionMapper.updateTitle(sessionId, userId, t);
+        Map<String, Object> data = new HashMap<>();
+        data.put("sessionId", sessionId);
+        data.put("title", t);
+        return ApiResponse.success("对话已重命名", data);
+    }
+
+    @Override
+    public ApiResponse<Map<String, Object>> renameMaterial(Long fileId, String fileName, Long userId) {
+        if (fileId == null) {
+            return ApiResponse.error(400, "fileId 必填");
+        }
+        if (!StringUtils.hasText(fileName)) {
+            return ApiResponse.error(400, "fileName 不能为空");
+        }
+        Material material = materialMapper.selectById(fileId);
+        if (material == null) {
+            return ApiResponse.error(404, "文件不存在");
+        }
+        ChatSession session = chatSessionMapper.selectByIdAndUserId(material.getSessionId(), userId);
+        if (session == null) {
+            return ApiResponse.error(403, "无权操作该附件");
+        }
+        String name = fileName.trim();
+        if (name.length() > 256) {
+            return ApiResponse.error(400, "文件名过长");
+        }
+        materialMapper.updateFileName(fileId, name);
+        Map<String, Object> data = new HashMap<>();
+        data.put("fileId", fileId);
+        data.put("fileName", name);
+        return ApiResponse.success("附件已重命名", data);
+    }
+
+    @Override
+    public ApiResponse<Map<String, Object>> deleteMaterial(Long fileId, String sessionId, Long userId) {
+        if (fileId == null) {
+            return ApiResponse.error(400, "fileId 必填");
+        }
+        Material material = materialMapper.selectById(fileId);
+        if (material == null) {
+            return ApiResponse.error(404, "文件不存在");
+        }
+        if (StringUtils.hasText(sessionId) && !sessionId.equals(material.getSessionId())) {
+            return ApiResponse.error(400, "sessionId 与附件不匹配");
+        }
+        ChatSession session = chatSessionMapper.selectByIdAndUserId(material.getSessionId(), userId);
+        if (session == null) {
+            return ApiResponse.error(403, "无权删除该附件");
+        }
+        String sid = material.getSessionId();
+
+        stripAttachmentIdFromSessionMessages(sid, fileId);
+
+        File disk = new File(material.getFilePath());
+        if (disk.exists()) {
+            // noinspection ResultOfMethodCallIgnored
+            disk.delete();
+        }
+
+        materialMapper.deleteById(fileId);
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("fileId", fileId);
+        data.put("sessionId", sid);
+        data.put("deletedAt", LocalDateTime.now().toString());
+        return ApiResponse.success("附件已删除", data);
+    }
+
+    @Override
+    public ApiResponse<Map<String, Object>> editUserMessageAndRegenerate(String sessionId,
+                                                                         Long messageId,
+                                                                         String newContent,
+                                                                         List<Long> fileIds,
+                                                                         Long userId) {
+        if (!StringUtils.hasText(sessionId) || messageId == null) {
+            return ApiResponse.error(400, "sessionId、messageId 必填");
+        }
+        if (!StringUtils.hasText(newContent)) {
+            return ApiResponse.error(400, "newContent 不能为空");
+        }
+        String hit = sensitiveWordService.findHitInUserText(newContent);
+        if (hit != null) {
+            return ApiResponse.error(400, "内容包含敏感词，请修改后重试");
+        }
+        ChatSession session = chatSessionMapper.selectByIdAndUserId(sessionId, userId);
+        if (session == null) {
+            return ApiResponse.error(404, "会话不存在或无权限");
+        }
+        ChatMessage userMsg = chatMessageMapper.selectById(messageId);
+        if (userMsg == null || !Objects.equals(userMsg.getSessionId(), sessionId)) {
+            return ApiResponse.error(404, "消息不存在或不属于该会话");
+        }
+        if (!"user".equalsIgnoreCase(userMsg.getRole())) {
+            return ApiResponse.error(400, "只能编辑用户消息");
+        }
+
+        String attachmentJson;
+        List<Long> effectiveFileIds;
+        if (fileIds != null) {
+            attachmentJson = attachmentIdsJson(fileIds);
+            effectiveFileIds = fileIds;
+        } else {
+            attachmentJson = userMsg.getAttachmentIds();
+            effectiveFileIds = parseAttachmentIdsFromStored(userMsg.getAttachmentIds());
+        }
+
+        chatMessageMapper.updateContentAndAttachments(messageId, newContent.trim(), attachmentJson);
+        chatMessageMapper.deleteBySessionIdAndIdGreaterThan(sessionId, messageId);
+        rebuildChatHistoryRedis(sessionId);
+
+        String replyText;
+        try {
+            replyText = generateAssistantReply(sessionId, newContent.trim(), effectiveFileIds);
+        } catch (Exception e) {
+            return ApiResponse.error(503, "AI 服务暂不可用，请稍后重试");
+        }
+        replyText = sensitiveWordService.sanitizeAssistantOutput(StringUtils.hasText(replyText) ? replyText : "");
+
+        ChatMessage aiMsg = new ChatMessage();
+        aiMsg.setSessionId(sessionId);
+        aiMsg.setRole("assistant");
+        aiMsg.setContent(StringUtils.hasText(replyText) ? replyText : "（AI 未返回内容）");
+        aiMsg.setCreateTime(LocalDateTime.now());
+        chatMessageMapper.insert(aiMsg);
+
+        if ("新课件任务".equals(session.getTitle())) {
+            autoRenameSession(session, newContent, aiMsg.getContent());
+        }
+
+        Map<String, Object> tokenUsage = new HashMap<>();
+        tokenUsage.put("prompt", 0);
+        tokenUsage.put("completion", 0);
+        tokenUsage.put("total", 0);
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("messageId", aiMsg.getId());
+        data.put("reply", aiMsg.getContent());
+        data.put("editedMessageId", messageId);
+        data.put("tokenUsage", tokenUsage);
+        ChatSession latestSession = chatSessionMapper.selectById(sessionId);
+        data.put("autoTitle", latestSession == null ? session.getTitle() : latestSession.getTitle());
+        data.put("status", "waiting");
+        return ApiResponse.success("已根据修改后的内容重新生成回复", data);
+    }
+
+    private String generateAssistantReply(String sessionId, String question, List<Long> fileIds) throws Exception {
+        if (!CollectionUtils.isEmpty(fileIds)) {
+            String materialsContext = buildMaterialsContext(fileIds, sessionId);
+            String chatHistory = buildLatestHistory(sessionId, 8);
+            String prompt = "【历史对话】\n" + chatHistory + "\n\n【附件解析结果】\n" + materialsContext
+                    + "\n\n【用户问题】\n" + question;
+            LlmGenerateResponse llmResp = ragApiClient.llmGenerate(
+                    prompt,
+                    "你是教学助手，请优先依据附件解析结果回答。若信息不足，请明确说明不足点。",
+                    sessionId
+            );
+            return llmResp == null ? "" : llmResp.getAnswer();
+        }
+        RagRetrieveAndAnswerResponse ragResp = ragApiClient.ragChat(question, sessionId, 5, false);
+        return ragResp == null ? "" : ragResp.getAnswer();
+    }
+
+    private void rebuildChatHistoryRedis(String sessionId) {
+        String key = "chat_history:" + sessionId;
+        stringRedisTemplate.delete(key);
+        List<ChatMessage> latest = chatMessageMapper.selectLatestBySessionId(sessionId, 10);
+        if (!latest.isEmpty()) {
+            List<String> historyJson = latest.stream()
+                    .sorted(Comparator.comparing(ChatMessage::getCreateTime))
+                    .map(ChatMessage::getContent)
+                    .collect(Collectors.toList());
+            stringRedisTemplate.opsForList().rightPushAll(key, historyJson);
+            stringRedisTemplate.expire(key, java.time.Duration.ofHours(2));
+        }
+    }
+
+    private List<Long> parseAttachmentIdsFromStored(String stored) {
+        if (!StringUtils.hasText(stored)) {
+            return null;
+        }
+        String s = stored.trim();
+        if (s.startsWith("[") && s.endsWith("]")) {
+            s = s.substring(1, s.length() - 1).trim();
+            if (!StringUtils.hasText(s)) {
+                return Collections.emptyList();
+            }
+            List<Long> out = new ArrayList<>();
+            for (String p : s.split(",")) {
+                String t = p.trim();
+                if (StringUtils.hasText(t)) {
+                    out.add(Long.parseLong(t));
+                }
+            }
+            return out;
+        }
+        return null;
+    }
+
+    private String attachmentIdsJson(List<Long> fileIds) {
+        if (CollectionUtils.isEmpty(fileIds)) {
+            return null;
+        }
+        return fileIds.stream().map(String::valueOf).collect(Collectors.joining(",", "[", "]"));
+    }
+
+    private void stripAttachmentIdFromSessionMessages(String sessionId, Long fileId) {
+        List<ChatMessage> messages = chatMessageMapper.selectBySessionId(sessionId);
+        for (ChatMessage msg : messages) {
+            String att = msg.getAttachmentIds();
+            if (!StringUtils.hasText(att)) {
+                continue;
+            }
+            List<Long> ids = parseAttachmentIdsFromStored(att);
+            if (ids == null || ids.isEmpty()) {
+                continue;
+            }
+            if (ids.stream().noneMatch(id -> id.equals(fileId))) {
+                continue;
+            }
+            List<Long> next = ids.stream().filter(id -> !id.equals(fileId)).collect(Collectors.toList());
+            String newJson = next.isEmpty() ? null : attachmentIdsJson(next);
+            chatMessageMapper.updateAttachmentIds(msg.getId(), newJson);
+        }
     }
 
     private String buildLatestHistory(String sessionId, int limit) {

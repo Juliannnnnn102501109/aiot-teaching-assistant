@@ -1,11 +1,8 @@
 package com.aicoursemaster.controller;
 
 import com.aicoursemaster.common.ApiResponse;
-import com.aicoursemaster.domain.ChatSession;
-import com.aicoursemaster.domain.GenerationTask;
-import com.aicoursemaster.mapper.ChatSessionMapper;
-import com.aicoursemaster.mapper.GenerationTaskMapper;
 import com.aicoursemaster.mapper.MaterialMapper;
+import com.aicoursemaster.service.GenerationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -24,8 +21,7 @@ public class CallbackController {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final MaterialMapper materialMapper;
-    private final GenerationTaskMapper generationTaskMapper;
-    private final ChatSessionMapper chatSessionMapper;
+    private final GenerationService generationService;
 
     @PostMapping("/material/parsed")
     public ApiResponse<Void> materialParsed(@RequestBody Map<String, Object> body) {
@@ -57,10 +53,6 @@ public class CallbackController {
     @PostMapping("/generation/result")
     public ApiResponse<Void> generationResult(@RequestBody Map<String, Object> body) {
         String taskId = (String) body.get("taskId");
-        GenerationTask task = generationTaskMapper.selectByTaskId(taskId);
-        if (task == null) {
-            return ApiResponse.error(404, "任务不存在");
-        }
         String status = (String) body.get("status");
         Number progressNum = (Number) body.get("progress");
         Integer progress = progressNum == null ? null : progressNum.intValue();
@@ -69,26 +61,8 @@ public class CallbackController {
         String gameUrl = (String) body.get("gameUrl");
         String outline = (String) body.get("outline");
         String errorMsg = (String) body.get("errorMsg");
-
-        task.setStatus(status);
-        task.setProgress(progress);
-        task.setPptUrl(pptUrl);
-        task.setDocUrl(docUrl);
-        task.setGameUrl(gameUrl);
-        task.setOutline(outline);
-        task.setFailReason(errorMsg);
-        generationTaskMapper.updateByTaskId(task);
-
-        // 同步回 chat_session（方案 A）
-        ChatSession session = chatSessionMapper.selectById(task.getSessionId());
-        if (session != null) {
-            session.setPptUrl(pptUrl);
-            session.setDocUrl(docUrl);
-            session.setGameUrl(gameUrl);
-            session.setStatus("success".equals(status) ? 2 : 0);
-            chatSessionMapper.updateResultAndStatus(session);
-        }
-        return ApiResponse.success(null);
+        return generationService.handleGenerationResultCallback(
+                taskId, status, progress, pptUrl, docUrl, gameUrl, outline, errorMsg);
     }
 }
 

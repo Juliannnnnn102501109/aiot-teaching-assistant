@@ -209,6 +209,27 @@ class LlmEngine:
             self.is_mock_mode = True
             self.llm = None
     
+    def _invoke_llm_core(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        """实际调用模型，不经过教学策略澄清（供 generate_json 等结构化输出使用）。"""
+        if self.is_mock_mode:
+            return self._mock_generate(prompt, system_prompt)
+        try:
+            if isinstance(self.llm, ChatOpenAI) or hasattr(self.llm, "invoke"):
+                messages = []
+                if system_prompt:
+                    messages.append(SystemMessage(content=system_prompt))
+                messages.append(HumanMessage(content=prompt))
+                response = self.llm.invoke(messages)
+                if hasattr(response, "content"):
+                    return response.content
+                return str(response)
+            full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+            return self.llm.invoke(full_prompt)
+        except Exception as e:
+            print(f"❌ LLM Generation Error: {e}")
+            print("🔄 Falling back to MOCK mode for this request...")
+            return self._mock_generate(prompt, system_prompt)
+
     def generate(self, prompt: str, system_prompt: Optional[str] = None) -> str:
         """
         生成回复
@@ -227,29 +248,7 @@ class LlmEngine:
             clarification_questions = self._get_clarification_questions(prompt)
             return self._format_clarification_response(clarification_questions)
         
-        try:
-            if isinstance(self.llm, ChatOpenAI) or hasattr(self.llm, 'invoke'):
-                # 构建消息列表
-                messages = []
-                if system_prompt:
-                    messages.append(SystemMessage(content=system_prompt))
-                messages.append(HumanMessage(content=prompt))
-                
-                response = self.llm.invoke(messages)
-                # 处理不同返回类型
-                if hasattr(response, 'content'):
-                    return response.content
-                return str(response)
-            else:
-                # 传统 LLM 接口
-                full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-                return self.llm.invoke(full_prompt)
-                
-        except Exception as e:
-            print(f"❌ LLM Generation Error: {e}")
-            print("🔄 Falling back to MOCK mode for this request...")
-            # 临时降级
-            return self._mock_generate(prompt, system_prompt)
+        return self._invoke_llm_core(prompt, system_prompt)
 
     def _needs_clarification(self, prompt: str) -> bool:
         """检查是否需要澄清教学策略"""
@@ -308,7 +307,7 @@ class LlmEngine:
 
         for i in range(max_retries):
             try:
-                raw_text = self.generate(prompt, full_system)
+                raw_text = self._invoke_llm_core(prompt, full_system)
                 result = self._extract_json_from_text(raw_text)
                 if result:
                     return result

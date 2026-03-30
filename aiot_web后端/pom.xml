@@ -58,6 +58,12 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- BCrypt（密码哈希，不引入完整 Spring Security Web） -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
         <!-- JWT（后续用户认证模块会用到） -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

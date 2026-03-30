@@ -82,5 +82,17 @@
         where task_id = #{taskId}
     </update>
 
+    <update id="updateTaskIdById">
+        update generation_task
+        set
+            task_id = #{taskId},
+            update_time = now()
+        where id = #{id}
+    </update>
+
+    <select id="countAll" resultType="long">
+        select count(*) from generation_task
+    </select>
+
 </mapper>
 

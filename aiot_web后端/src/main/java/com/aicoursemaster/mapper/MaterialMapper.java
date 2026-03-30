@@ -22,5 +22,11 @@ public interface MaterialMapper {
                           @Param("summary") String summary,
                           @Param("keywords") String keywords,
                           @Param("errorMsg") String errorMsg);
+
+    int updateFileName(@Param("id") Long id, @Param("fileName") String fileName);
+
+    int deleteById(@Param("id") Long id);
+
+    long countAll();
 }
 

@@ -101,5 +101,29 @@
         where id = #{id}
     </update>
 
+    <update id="updateContentAndAttachments">
+        update chat_message
+        set
+            content = #{content},
+            attachment_ids = #{attachmentIds}
+        where id = #{id}
+    </update>
+
+    <update id="updateAttachmentIds">
+        update chat_message
+        set attachment_ids = #{attachmentIds}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteBySessionIdAndIdGreaterThan">
+        delete from chat_message
+        where session_id = #{sessionId}
+          and id &gt; #{afterId}
+    </delete>
+
+    <select id="countAll" resultType="long">
+        select count(*) from chat_message
+    </select>
+
 </mapper>
 

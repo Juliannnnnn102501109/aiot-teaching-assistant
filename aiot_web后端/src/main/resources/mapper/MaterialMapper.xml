@@ -66,5 +66,21 @@
         where id = #{id}
     </update>
 
+    <update id="updateFileName">
+        update material
+        set
+            file_name = #{fileName},
+            update_time = now()
+        where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from material where id = #{id}
+    </delete>
+
+    <select id="countAll" resultType="long">
+        select count(*) from material
+    </select>
+
 </mapper>
 

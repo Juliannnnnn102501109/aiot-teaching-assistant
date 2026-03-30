@@ -12,9 +12,11 @@ public interface ChatService {
 
     ApiResponse<Map<String, Object>> createSession(Integer sceneType, String firstPrompt, Long userId);
 
-    ApiResponse<Map<String, Object>> listSessions(String keyword, Long userId);
+    ApiResponse<Map<String, Object>> listSessions(String keyword, Integer page, Integer size, Long userId);
 
     ApiResponse<Map<String, Object>> togglePinSession(String sessionId, boolean pin, Long userId);
+
+    ApiResponse<Map<String, Object>> reorderPinnedSessions(List<String> orderedSessionIds, Long userId);
 
     ApiResponse<Map<String, Object>> sendMessage(String sessionId,
                                                  String content,
@@ -37,6 +39,18 @@ public interface ChatService {
 
     ApiResponse<Map<String, Object>> queryMaterialStatus(Long fileId, Long userId);
 
+    ApiResponse<Map<String, Object>> deleteMaterial(Long fileId, String sessionId, Long userId);
+
     ApiResponse<Map<String, Object>> previewMaterial(Long fileId, Long userId);
+
+    ApiResponse<Map<String, Object>> renameSession(String sessionId, String title, Long userId);
+
+    ApiResponse<Map<String, Object>> renameMaterial(Long fileId, String fileName, Long userId);
+
+    ApiResponse<Map<String, Object>> editUserMessageAndRegenerate(String sessionId,
+                                                                    Long messageId,
+                                                                    String newContent,
+                                                                    List<Long> fileIds,
+                                                                    Long userId);
 }
 

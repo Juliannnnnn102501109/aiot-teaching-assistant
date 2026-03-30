@@ -24,5 +24,11 @@ public interface ChatSessionMapper {
     int deleteByIdAndUserId(@Param("id") String id, @Param("userId") Long userId);
 
     List<ChatSession> selectByUserId(@Param("userId") Long userId);
+
+    int updateTitle(@Param("id") String id,
+                    @Param("userId") Long userId,
+                    @Param("title") String title);
+
+    long countAll();
 }
 
