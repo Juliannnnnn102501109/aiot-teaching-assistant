@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aicoursemaster.mapper.SensitiveWordMapper">
+
+    <resultMap id="SensitiveWordResult" type="com.aicoursemaster.domain.SensitiveWord">
+        <id property="id" column="id"/>
+        <result property="word" column="word"/>
+        <result property="enabled" column="enabled"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <select id="selectAllEnabled" resultMap="SensitiveWordResult">
+        select id, word, enabled, create_time, update_time
+        from sensitive_word
+        where enabled = 1
+        order by length(word) desc
+    </select>
+
+    <select id="selectAll" resultMap="SensitiveWordResult">
+        select id, word, enabled, create_time, update_time
+        from sensitive_word
+        order by id desc
+    </select>
+
+    <select id="selectById" resultMap="SensitiveWordResult">
+        select id, word, enabled, create_time, update_time
+        from sensitive_word
+        where id = #{id}
+    </select>
+
+    <select id="selectByWord" resultMap="SensitiveWordResult">
+        select id, word, enabled, create_time, update_time
+        from sensitive_word
+        where word = #{word}
+    </select>
+
+    <insert id="insert" parameterType="com.aicoursemaster.domain.SensitiveWord" useGeneratedKeys="true" keyProperty="id">
+        insert into sensitive_word (word, enabled, create_time, update_time)
+        values (#{word}, #{enabled}, now(), now())
+    </insert>
+
+    <update id="update" parameterType="com.aicoursemaster.domain.SensitiveWord">
+        update sensitive_word
+        set
+            word = #{word},
+            enabled = #{enabled},
+            update_time = now()
+        where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from sensitive_word where id = #{id}
+    </delete>
+
+    <select id="countAll" resultType="long">
+        select count(*) from sensitive_word
+    </select>
+
+</mapper>

@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aicoursemaster.mapper.MaterialMapper">
+
+    <resultMap id="MaterialResult" type="com.aicoursemaster.domain.Material">
+        <id property="id" column="id"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="fileName" column="file_name"/>
+        <result property="filePath" column="file_path"/>
+        <result property="fileType" column="file_type"/>
+        <result property="parseStatus" column="parse_status"/>
+        <result property="summary" column="summary"/>
+        <result property="keywords" column="keywords"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.aicoursemaster.domain.Material" useGeneratedKeys="true" keyProperty="id">
+        insert into material
+        (
+            session_id, file_name, file_path, file_type,
+            parse_status, summary, keywords,
+            create_time, update_time
+        )
+        values
+        (
+            #{sessionId}, #{fileName}, #{filePath}, #{fileType},
+            #{parseStatus}, #{summary}, #{keywords},
+            #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <select id="selectById" parameterType="long" resultMap="MaterialResult">
+        select
+            id, session_id, file_name, file_path, file_type,
+            parse_status, summary, keywords,
+            create_time, update_time
+        from material
+        where id = #{id}
+    </select>
+
+    <select id="selectBySessionId" parameterType="string" resultMap="MaterialResult">
+        select
+            id, session_id, file_name, file_path, file_type,
+            parse_status, summary, keywords,
+            create_time, update_time
+        from material
+        where session_id = #{sessionId}
+        order by create_time asc
+    </select>
+
+    <delete id="deleteBySessionId" parameterType="string">
+        delete from material
+        where session_id = #{sessionId}
+    </delete>
+
+    <update id="updateParseResult">
+        update material
+        set
+            parse_status = #{status},
+            summary = #{summary},
+            keywords = #{keywords},
+            update_time = now()
+        where id = #{id}
+    </update>
+
+    <update id="updateFileName">
+        update material
+        set
+            file_name = #{fileName},
+            update_time = now()
+        where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from material where id = #{id}
+    </delete>
+
+    <select id="countAll" resultType="long">
+        select count(*) from material
+    </select>
+
+</mapper>
+

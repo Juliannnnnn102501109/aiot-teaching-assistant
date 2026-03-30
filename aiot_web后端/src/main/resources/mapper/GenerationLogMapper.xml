@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aicoursemaster.mapper.GenerationLogMapper">
+
+    <resultMap id="GenerationLogResult" type="com.aicoursemaster.domain.GenerationLog">
+        <id property="id" column="id"/>
+        <result property="taskId" column="task_id"/>
+        <result property="message" column="message"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.aicoursemaster.domain.GenerationLog" useGeneratedKeys="true" keyProperty="id">
+        insert into generation_log
+        (
+            task_id, message, create_time
+        )
+        values
+        (
+            #{taskId}, #{message}, #{createTime}
+        )
+    </insert>
+
+    <select id="selectByTaskId" parameterType="string" resultMap="GenerationLogResult">
+        select
+            id, task_id, message, create_time
+        from generation_log
+        where task_id = #{taskId}
+        order by create_time asc
+    </select>
+
+</mapper>
+

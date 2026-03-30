@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aicoursemaster.mapper.GenerationTaskVersionMapper">
+
+    <resultMap id="GenerationTaskVersionResult" type="com.aicoursemaster.domain.GenerationTaskVersion">
+        <id property="id" column="id"/>
+        <result property="taskId" column="task_id"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="versionNo" column="version_no"/>
+        <result property="pptUrl" column="ppt_url"/>
+        <result property="docUrl" column="doc_url"/>
+        <result property="gameUrl" column="game_url"/>
+        <result property="outline" column="outline"/>
+        <result property="outlineChangeReason" column="outline_change_reason"/>
+        <result property="requirementsSnapshot" column="requirements_snapshot"/>
+        <result property="changeType" column="change_type"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.aicoursemaster.domain.GenerationTaskVersion" useGeneratedKeys="true" keyProperty="id">
+        insert into generation_task_version
+        (
+            task_id, session_id, version_no,
+            ppt_url, doc_url, game_url,
+            outline, outline_change_reason, requirements_snapshot,
+            change_type, create_time
+        )
+        values
+        (
+            #{taskId}, #{sessionId}, #{versionNo},
+            #{pptUrl}, #{docUrl}, #{gameUrl},
+            #{outline}, #{outlineChangeReason}, #{requirementsSnapshot},
+            #{changeType}, #{createTime}
+        )
+    </insert>
+
+    <select id="selectMaxVersionNoByTaskId" resultType="java.lang.Integer">
+        select max(version_no) from generation_task_version where task_id = #{taskId}
+    </select>
+
+    <select id="selectByTaskIdOrderByVersionDesc" resultMap="GenerationTaskVersionResult">
+        select
+            id, task_id, session_id, version_no,
+            ppt_url, doc_url, game_url,
+            outline, outline_change_reason, requirements_snapshot,
+            change_type, create_time
+        from generation_task_version
+        where task_id = #{taskId}
+        order by version_no desc
+    </select>
+
+    <select id="selectByTaskIdAndVersionNo" resultMap="GenerationTaskVersionResult">
+        select
+            id, task_id, session_id, version_no,
+            ppt_url, doc_url, game_url,
+            outline, outline_change_reason, requirements_snapshot,
+            change_type, create_time
+        from generation_task_version
+        where task_id = #{taskId} and version_no = #{versionNo}
+    </select>
+
+</mapper>
