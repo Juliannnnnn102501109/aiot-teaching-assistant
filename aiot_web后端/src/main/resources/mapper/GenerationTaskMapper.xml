@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.aicoursemaster.mapper.GenerationTaskMapper">
+
+    <resultMap id="GenerationTaskResult" type="com.aicoursemaster.domain.GenerationTask">
+        <id property="id" column="id"/>
+        <result property="taskId" column="task_id"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="finalRequirements" column="final_requirements"/>
+        <result property="templateId" column="template_id"/>
+        <result property="materialIds" column="material_ids"/>
+        <result property="status" column="status"/>
+        <result property="progress" column="progress"/>
+        <result property="pptUrl" column="ppt_url"/>
+        <result property="docUrl" column="doc_url"/>
+        <result property="gameUrl" column="game_url"/>
+        <result property="outline" column="outline"/>
+        <result property="failReason" column="fail_reason"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.aicoursemaster.domain.GenerationTask" useGeneratedKeys="true" keyProperty="id">
+        insert into generation_task
+        (
+            task_id,
+            session_id, final_requirements, template_id,
+            material_ids, status, progress,
+            ppt_url, doc_url, game_url,
+            outline, fail_reason,
+            create_time, update_time
+        )
+        values
+        (
+            #{taskId},
+            #{sessionId}, #{finalRequirements}, #{templateId},
+            #{materialIds}, #{status}, #{progress},
+            #{pptUrl}, #{docUrl}, #{gameUrl},
+            #{outline}, #{failReason},
+            #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <select id="selectLatestBySessionId" parameterType="string" resultMap="GenerationTaskResult">
+        select
+            id, task_id, session_id, final_requirements, template_id,
+            material_ids, status, progress,
+            ppt_url, doc_url, game_url,
+            outline, fail_reason,
+            create_time, update_time
+        from generation_task
+        where session_id = #{sessionId}
+        order by create_time desc
+        limit 1
+    </select>
+
+    <select id="selectByTaskId" parameterType="string" resultMap="GenerationTaskResult">
+        select
+            id, task_id, session_id, final_requirements, template_id,
+            material_ids, status, progress,
+            ppt_url, doc_url, game_url,
+            outline, fail_reason,
+            create_time, update_time
+        from generation_task
+        where task_id = #{taskId}
+    </select>
+
+    <update id="updateByTaskId" parameterType="com.aicoursemaster.domain.GenerationTask">
+        update generation_task
+        set
+            final_requirements = #{finalRequirements},
+            status = #{status},
+            progress = #{progress},
+            ppt_url = #{pptUrl},
+            doc_url = #{docUrl},
+            game_url = #{gameUrl},
+            outline = #{outline},
+            fail_reason = #{failReason},
+            update_time = now()
+        where task_id = #{taskId}
+    </update>
+
+    <update id="updateTaskIdById">
+        update generation_task
+        set
+            task_id = #{taskId},
+            update_time = now()
+        where id = #{id}
+    </update>
+
+    <select id="countAll" resultType="long">
+        select count(*) from generation_task
+    </select>
+
+</mapper>
+
