@@ -3,14 +3,10 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-# --- 引入你现有的引擎 ---
-# 假设 rag_engine.py 和 llm_engine.py 在当前目录或 src 目录下
-# 如果目录结构不同，请调整导入路径
 try:
     from rag_engine import HybridRagEngine
     from llm_engine import LlmEngine
 except ImportError:
-    # 适配可能的 src 目录结构
     sys.path.insert(0, str(Path(__file__).parent / "src"))
     from rag_engine import HybridRagEngine
     from llm_engine import LlmEngine
@@ -33,7 +29,7 @@ app = FastAPI(
 rag_engine: Optional[HybridRagEngine] = None
 llm_engine: Optional[LlmEngine] = None
 
-# 系统配置 (与你 app.py 中的配置保持一致)
+# 系统配置
 SYSTEM_CONFIG = {
     "embedding_model": "BAAI/bge-small-zh-v1.5",
     "model_provider": "ollama",
